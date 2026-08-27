@@ -1,0 +1,174 @@
+// Laptop Shop Business Software - Prisma schema
+// Provider: SQLite (file-based, zero external DB setup required)
+//
+// Note: SQLite has no native enum type, so enum-like fields are plain Strings
+// constrained by Zod validation in the API layer (see src/types/enums.ts).
+// Allowed values are documented next to each field below.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           Int      @id @default(autoincrement())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         String   @default("STAFF") // ADMIN | STAFF
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  sales           Sale[]
+  purchaseOrders  PurchaseOrder[]
+  repairTickets   RepairTicket[] @relation("AssignedTechnician")
+}
+
+model Category {
+  id        Int       @id @default(autoincrement())
+  name      String    @unique
+  createdAt DateTime  @default(now())
+  products  Product[]
+}
+
+model Brand {
+  id        Int       @id @default(autoincrement())
+  name      String    @unique
+  createdAt DateTime  @default(now())
+  products  Product[]
+}
+
+model Product {
+  id            Int      @id @default(autoincrement())
+  sku           String   @unique
+  name          String
+  brandId       Int?
+  categoryId    Int?
+  cpu           String?
+  ram           String?
+  storage       String?
+  screenSize    String?
+  condition     String   @default("NEW") // NEW | USED | REFURBISHED
+  description   String?
+  costPrice     Float    @default(0)
+  sellingPrice  Float    @default(0)
+  stockQuantity Int      @default(0)
+  reorderLevel  Int      @default(3)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  brand              Brand?               @relation(fields: [brandId], references: [id])
+  category           Category?            @relation(fields: [categoryId], references: [id])
+  saleItems          SaleItem[]
+  purchaseOrderItems PurchaseOrderItem[]
+}
+
+model Customer {
+  id        Int      @id @default(autoincrement())
+  name      String
+  email     String?
+  phone     String?
+  address   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sales         Sale[]
+  repairTickets RepairTicket[]
+}
+
+model Supplier {
+  id            Int      @id @default(autoincrement())
+  name          String
+  contactPerson String?
+  email         String?
+  phone         String?
+  address       String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  purchaseOrders PurchaseOrder[]
+}
+
+model Sale {
+  id            Int      @id @default(autoincrement())
+  invoiceNumber String   @unique
+  customerId    Int?
+  userId        Int
+  subtotal      Float
+  discount      Float    @default(0)
+  tax           Float    @default(0)
+  total         Float
+  paymentMethod String   @default("CASH") // CASH | CARD | BANK_TRANSFER | MOBILE_MONEY | OTHER
+  status        String   @default("COMPLETED") // COMPLETED | REFUNDED | CANCELLED
+  notes         String?
+  createdAt     DateTime @default(now())
+
+  customer Customer?  @relation(fields: [customerId], references: [id])
+  user     User       @relation(fields: [userId], references: [id])
+  items    SaleItem[]
+}
+
+model SaleItem {
+  id         Int    @id @default(autoincrement())
+  saleId     Int
+  productId  Int
+  quantity   Int
+  unitPrice  Float
+  lineTotal  Float
+
+  sale    Sale    @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+}
+
+model PurchaseOrder {
+  id         Int       @id @default(autoincrement())
+  poNumber   String    @unique
+  supplierId Int
+  userId     Int
+  status     String    @default("PENDING") // PENDING | RECEIVED | CANCELLED
+  totalCost  Float     @default(0)
+  notes      String?
+  createdAt  DateTime  @default(now())
+  receivedAt DateTime?
+
+  supplier Supplier            @relation(fields: [supplierId], references: [id])
+  user     User                @relation(fields: [userId], references: [id])
+  items    PurchaseOrderItem[]
+}
+
+model PurchaseOrderItem {
+  id                Int   @id @default(autoincrement())
+  purchaseOrderId   Int
+  productId         Int
+  quantity          Int
+  unitCost          Float
+
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  product       Product       @relation(fields: [productId], references: [id])
+}
+
+model RepairTicket {
+  id               Int       @id @default(autoincrement())
+  ticketNumber     String    @unique
+  customerId       Int
+  technicianId     Int?
+  deviceBrand      String
+  deviceModel      String
+  serialNumber     String?
+  issueDescription String
+  status           String    @default("RECEIVED") // RECEIVED | DIAGNOSING | IN_PROGRESS | AWAITING_PARTS | COMPLETED | PICKED_UP | CANCELLED
+  estimatedCost    Float?
+  finalCost        Float?
+  technicianNotes  String?
+  receivedAt       DateTime  @default(now())
+  completedAt      DateTime?
+  updatedAt        DateTime  @updatedAt
+
+  customer   Customer @relation(fields: [customerId], references: [id])
+  technician User?    @relation("AssignedTechnician", fields: [technicianId], references: [id])
+}
